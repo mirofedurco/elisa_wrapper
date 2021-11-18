@@ -14,16 +14,12 @@
     "surface_potential": 6.0,
     "synchronicity": 1.5,
     "t_eff": 7000.0,
-    "gravity_darkening": 1.0,
-    "albedo": 1.0,
     "metallicity": 0.0
   },
   "secondary": {
     "surface_potential": 7.0,
     "synchronicity": 1.0,
     "t_eff": 6000.0,
-    "gravity_darkening": 0.32,
-    "albedo": 0.6,
     "metallicity": 0.0
   }
 }
