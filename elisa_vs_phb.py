@@ -138,6 +138,35 @@ def display_comparison(phases_e, fluxes_e, phases_b, fluxes_b):
     plt.show()
 
 
+def produce_aux_params(params):
+    binary = system.BinarySystem.from_json(params)
+    sma = binary.semi_major_axis * units.DISTANCE_UNIT
+    params["primary"]["albedo"] = binary.primary.albedo
+    params["secondary"]["albedo"] = binary.secondary.albedo
+    params["primary"]["gravity_darkening"] = binary.primary.gravity_darkening
+    params["secondary"]["gravity_darkening"] = binary.secondary.gravity_darkening
+
+    alphas = (np.degrees(binary.primary.discretization_factor), np.degrees(binary.secondary.discretization_factor))
+    print(f"Discretization factors: {alphas}")
+
+    position = Position(idx=0, distance=1.0, azimuth=90, true_anomaly=0, phase=0)
+    container = OrbitalPositionContainer.from_binary_system(binary, position)
+    container.build()
+
+    ntri = (container.primary.faces.shape[0], container.secondary.faces.shape[0])
+    print(f"Number of triangles: {ntri}")
+    r_eq = binary.calculate_equivalent_radius(component='both')
+    # K = 0.999
+    K = 1.0
+    # K = 1.002
+    r_eq1 = K * r_eq['primary'] * sma
+    r_eq2 = K * r_eq['secondary'] * sma
+
+    print(f"Radii: {r_eq1.to(u.solRad):.2f}, {r_eq2.to(u.solRad):.2f} solRad")
+
+    return ntri, (r_eq1, r_eq2)
+
+
 if __name__ == "__main__":
     logger = phoebe.logger(clevel='WARNING')
     home_dir = os.getcwd()
@@ -172,47 +201,24 @@ if __name__ == "__main__":
     # config.REFLECTION_EFFECT = False
     data['primary']['discretization_factor'] = alpha
     # params['secondary']['discretization_factor'] = alpha
-    binary = system.BinarySystem.from_json(data)
-    sma = binary.semi_major_axis * units.DISTANCE_UNIT
-
-    data["primary"]["albedo"] = binary.primary.albedo
-    data["secondary"]["albedo"] = binary.secondary.albedo
-    data["primary"]["gravity_darkening"] = binary.primary.gravity_darkening
-    data["secondary"]["gravity_darkening"] = binary.secondary.gravity_darkening
-
-    alphas = (np.degrees(binary.primary.discretization_factor), np.degrees(binary.secondary.discretization_factor))
-    print(f"Discretization factors: {alphas}")
-
-    position = Position(idx=0, distance=1.0, azimuth=90, true_anomaly=0, phase=0)
-    container = OrbitalPositionContainer.from_binary_system(binary, position)
-    container.build()
-
-    ntri = (container.primary.faces.shape[0], container.secondary.faces.shape[0])
-    print(f"Number of triangles: {ntri}")
-    r_eq = binary.calculate_equivalent_radius(component='both')
-    # K = 0.999
-    K = 1.0
-    # K = 1.002
-    r_eq1 = K * r_eq['primary'] * sma
-    r_eq2 = K * r_eq['secondary'] * sma
-
-    print(f"Radii: {r_eq1.to(u.solRad):.2f}, {r_eq2.to(u.solRad):.2f} solRad")
 
     phases = np.linspace(-0.6, 0.6, num=N_phs)
     data['primary']['discretization_factor'] = alpha
     data['secondary']['discretization_factor'] = alpha
 
+    ntri, r_eq = produce_aux_params(data)
+
     start_time = time()
-    binary = get_binary(data, triangles=ntri, r_eq=(r_eq1, r_eq2))
+    binary = get_binary(data, triangles=ntri, r_eq=r_eq)
     binary = run_observation(binary, phases, passbands=passbands)
     elapsed = np.round(time() - start_time, 2)
     print(f'PHOEBE time: {elapsed} s')
     phases_b = binary[f'{passband_to_disp}@times@latest'].value / binary['period@orbit'].value
     fluxes_b = binary[f'{passband_to_disp}@fluxes@latest'].value
 
-    start_time = time()
     binary.get_parameter(context='dataset', qualifier='fluxes', dataset=passband_to_disp)
 
+    start_time = time()
     obs, binary_e = get_data_elisa(data, phases, passbands=passbands)
     elapsed = np.round(time() - start_time, 2)
     print(f'ELISA time: {elapsed} s')
