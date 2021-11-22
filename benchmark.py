@@ -27,8 +27,8 @@ TEFF_RANGE_OVERCONTACT = (3500, 8000)
 N_PHS_RANGE = (100, 800)
 # N_PHS_RANGE = (10, 100)
 
-ALPHA = 7
-N_SAMPLES = 20000
+ALPHA = 5
+N_SAMPLES = 6000
 NUMBER_OF_PROCESSES = 7
 
 ERRORS = (
@@ -99,10 +99,14 @@ def eval_node(params, pssbnds, pssbnd_to_analyse, file):
     phases_b = binary[f'{pssbnd_to_analyse}@times@latest'].value / binary['period@orbit'].value
     fluxes_b = binary[f'{pssbnd_to_analyse}@fluxes@latest'].value
 
-    start_time = time()
-    obs, binary_e = vs.get_data_elisa(params, phases, passbands=pssbnds)
-    elapsed_e = np.round(time() - start_time, 2)
-    print(f'ELISA time: {elapsed_e} s')
+    try:
+        start_time = time()
+        obs, binary_e = vs.get_data_elisa(params, phases, passbands=pssbnds)
+        elapsed_e = np.round(time() - start_time, 2)
+        print(f'ELISA time: {elapsed_e} s')
+    except ERRORS as e:
+        print(f"Invalid system, reason: {e}")
+        return False
 
     phases_e, fluxes_e = obs.phases, obs.fluxes
     fluxes_e = fluxes_e[passband_to_analyse]
@@ -151,7 +155,7 @@ def perform_sampling(params_orig, pssbnds, pssbnd_to_analyse, file):
         result = [pool.apply_async(eval_node, (params, pssbnds, pssbnd_to_analyse, file)) for _ in success[fail_mask]]
         pool.close()
         pool.join()
-        success[fail_mask] = [r.get() for r in result]
+        success[fail_mask] = np.array([r.get() for r in result])
         print(f"Number of succesfull attempts: {np.count_nonzero(success)}/{N_SAMPLES}")
 
 
