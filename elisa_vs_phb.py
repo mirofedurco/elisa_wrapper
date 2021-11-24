@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 import phoebe
 import numpy as np
@@ -9,10 +8,8 @@ from elisa.binary_system import system
 from elisa.observer.observer import Observer
 from elisa import units
 from elisa import settings
-from elisa import ld
 from elisa.const import Position
 from elisa.binary_system.container import OrbitalPositionContainer
-from elisa.binary_system.surface.gravity import calculate_polar_gravity_acceleration
 import astropy.units as u
 
 import matplotlib.pyplot as plt
@@ -70,21 +67,6 @@ def get_binary(params, triangles, r_eq):
 
     b.set_value("syncpar@primary@component", params['primary']['synchronicity'])
     b.set_value("syncpar@secondary@component", params['secondary']['synchronicity'])
-
-    # b.set_value("ld_coeffs_bol@primary", ld_bol_coeff[orbit]['primary'])
-    # b.set_value("ld_coeffs_bol@secondary", ld_bol_coeff[orbit]['secondary'])
-    # b['ld_mode@secondary'] = 'manual'
-
-    # print(b.filter(context=['compute']))
-    # print(b.filter(context=['component', 'system']))
-    # print(b.filter(context=['constraint']))
-    # b.set_value_all('ld_mode_bol', value='manual')
-    # print(b.get_parameter(context=['component'], component='primary', qualifier='ld_coeffs_source_bol'))
-    # print(b.get_parameter(context=['component'], component='primary', qualifier='ld_func_bol'))
-    # print(b.get_parameter(context='compute', qualifier='irrad_method'))
-    # print(b['compute'].twigs)
-    # print(b['component'].twigs)
-    # sys.exit()
 
     return b
 
@@ -149,6 +131,8 @@ def produce_aux_params(params):
     alphas = (np.degrees(binary.primary.discretization_factor), np.degrees(binary.secondary.discretization_factor))
     print(f"Discretization factors: {alphas}")
 
+    # binary.plot.surface(colormap='temperature')
+
     position = Position(idx=0, distance=1.0, azimuth=90, true_anomaly=0, phase=0)
     container = OrbitalPositionContainer.from_binary_system(binary, position)
     container.build()
@@ -167,64 +151,33 @@ def produce_aux_params(params):
     return ntri, (r_eq1, r_eq2)
 
 
-if __name__ == "__main__":
-    logger = phoebe.logger(clevel='WARNING')
-    home_dir = os.getcwd()
-
+def compare_lc(params, alpha, passband, nphs, normalize=True):
     settings.configure(
         LIMB_DARKENING_LAW='logarithmic',
+        DEFAULT_DISCRETIZATION_FACTOR=alpha
     )
 
-    orbit = 'circular'
-    # orbit = 'eccentric'
+    phases = np.linspace(-0.6, 0.6, num=nphs)
 
-    # alpha = 2
-    # alpha = 3
-    # alpha = 5
-    alpha = 7
-    # alpha = 10
-    # N_phs = 10
-    # N_phs = 400
-    N_phs = 100
-    surface_discredizations = [10, 7, 5, 3]
-    n_phases = np.arange(10, 300, 20)
-    passband_to_disp = "TESS"
-    passbands = ["bolometric", "TESS", "Kepler"]
-    normalize = True
-    # normalize = False
-
-    data_circ = get_params(home_dir + '/models/test_binary_circ.json')
-    data_ecc = get_params(home_dir + '/models/test_binary_ecc.json')
-
-    data = data_ecc if orbit == 'eccentric' else data_circ
-
-    # config.REFLECTION_EFFECT = False
-    data['primary']['discretization_factor'] = alpha
-    # params['secondary']['discretization_factor'] = alpha
-
-    phases = np.linspace(-0.6, 0.6, num=N_phs)
-    data['primary']['discretization_factor'] = alpha
-    data['secondary']['discretization_factor'] = alpha
-
-    ntri, r_eq = produce_aux_params(data)
+    ntri, r_eq = produce_aux_params(params)
 
     start_time = time()
-    binary = get_binary(data, triangles=ntri, r_eq=r_eq)
-    binary = run_observation(binary, phases, passbands=passbands)
+    binary = get_binary(params, triangles=ntri, r_eq=r_eq)
+    binary = run_observation(binary, phases, passbands=passband)
     elapsed = np.round(time() - start_time, 2)
     print(f'PHOEBE time: {elapsed} s')
-    phases_b = binary[f'{passband_to_disp}@times@latest'].value / binary['period@orbit'].value
-    fluxes_b = binary[f'{passband_to_disp}@fluxes@latest'].value
+    phases_b = binary[f'{passband}@times@latest'].value / binary['period@orbit'].value
+    fluxes_b = binary[f'{passband}@fluxes@latest'].value
 
-    binary.get_parameter(context='dataset', qualifier='fluxes', dataset=passband_to_disp)
+    binary.get_parameter(context='dataset', qualifier='fluxes', dataset=passband)
 
     start_time = time()
-    obs, binary_e = get_data_elisa(data, phases, passbands=passbands)
+    obs, binary_e = get_data_elisa(params, phases, passbands=passband)
     elapsed = np.round(time() - start_time, 2)
     print(f'ELISA time: {elapsed} s')
 
     phases_e, fluxes_e = obs.phases, obs.fluxes
-    fluxes_e = fluxes_e[passband_to_disp]
+    fluxes_e = fluxes_e[passband]
 
     if normalize:
         fluxes_e /= np.max(fluxes_e)
@@ -233,3 +186,27 @@ if __name__ == "__main__":
     print(f'Mean flux elisa: {fluxes_e.mean()}, phoebe: {fluxes_b.mean()}')
 
     display_comparison(phases_e, fluxes_e, phases_b, fluxes_b)
+
+
+if __name__ == "__main__":
+    logger = phoebe.logger(clevel='WARNING')
+    home_dir = os.getcwd()
+
+    settings.configure(
+        LIMB_DARKENING_LAW='logarithmic',
+        # REFLECTION_EFFECT=False
+    )
+
+    orbit = 'circular'
+    alpha = 7
+    N_phs = 100
+    # passband = "bolometric"
+    passband = "TESS"
+    normalize = True
+
+    data_circ = get_params(home_dir + '/models/test_binary_circ.json')
+    data_ecc = get_params(home_dir + '/models/test_binary_ecc.json')
+
+    data = data_ecc if orbit == 'eccentric' else data_circ
+
+    compare_lc(params=data, alpha=alpha, passband=passband, nphs=N_phs, normalize=normalize)

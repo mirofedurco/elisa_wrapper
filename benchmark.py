@@ -39,7 +39,7 @@ ERRORS = (
 
 COLUMNS = ["inclination", "period", "argument_of_periastron", "eccentricity", "mass_ratio", "semi_major_axis",
            "p__surface_potential", "p__t_eff", "s__surface_potential", "s__t_eff", "std dev", "max_dev", "t_phoebe",
-           "t_elisa"]
+           "t_elisa", "N_phases"]
 
 
 def draw_params(params, circular=False):
@@ -72,7 +72,7 @@ def draw_params(params, circular=False):
 
 def eval_node(params, pssbnds, pssbnd_to_analyse, file):
     np.random.seed(int.from_bytes(os.urandom(4), byteorder='little'))
-    circular = np.random.choice([True, False])
+    circular = np.random.choice([True, False], p=[0.4, 0.6])
     params = draw_params(params=params, circular=circular)
 
     try:
@@ -120,7 +120,7 @@ def eval_node(params, pssbnds, pssbnd_to_analyse, file):
     stdev = res.std()
     maxdev = res.max()
 
-    write_csv_row(file, params, stdev, maxdev, elapsed_p, elapsed_e)
+    write_csv_row(file, params, stdev, maxdev, elapsed_p, elapsed_e, nphs)
     # vs.display_comparison(phases_e, fluxes_e, phases_b, fluxes_b)
 
     return True
@@ -132,11 +132,11 @@ def create_file_header(file):
         writer.writerow(COLUMNS)
 
 
-def write_csv_row(file, params, stdev, maxdev, t_phoebe, t_elisa):
+def write_csv_row(file, params, stdev, maxdev, t_phoebe, t_elisa, n_phs):
     row = [params["system"][col] for col in COLUMNS[:6]]
     row += [params["primary"][col.split("__")[1]] for col in COLUMNS[6:8]]
     row += [params["secondary"][col.split("__")[1]] for col in COLUMNS[8:10]]
-    row += [stdev, maxdev, t_phoebe, t_elisa]
+    row += [stdev, maxdev, t_phoebe, t_elisa, n_phs]
 
     with open(file, "a") as fl:
         writer = csv.writer(fl)
