@@ -168,7 +168,8 @@ def compare_lc(params, alpha, passband, nphs, normalize=True):
     binary.get_parameter(context='dataset', qualifier='fluxes', dataset=passband)
 
     start_time = time()
-    obs, binary_e = get_data_elisa(params, phases, passbands=passband)
+    obs = prepare_elisa_for_obs(params, passband)
+    obs, binary_e = get_elisa_observations(obs, phases)
     elapsed = np.round(time() - start_time, 2)
     print(f'ELISA time: {elapsed} s')
 
