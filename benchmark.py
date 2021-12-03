@@ -86,8 +86,9 @@ def eval_node(params, pssbnds, pssbnd_to_analyse, file):
     phases = np.linspace(-0.5, 0.5, num=nphs)
 
     try:
+        # start_time = time()
+        binary = vs.get_binary(params, r_eq=r_eq)
         start_time = time()
-        binary = vs.get_binary(params, triangles=ntri, r_eq=r_eq)
         binary = vs.run_observation(binary, phases, passbands=pssbnds)
         elapsed_p = np.round(time() - start_time, 2)
     except (ValueError,) as e:
@@ -100,8 +101,10 @@ def eval_node(params, pssbnds, pssbnd_to_analyse, file):
     fluxes_b = binary[f'{pssbnd_to_analyse}@fluxes@latest'].value
 
     try:
+        # start_time = time()
+        obs = vs.prepare_elisa_for_obs(params, passbands)
         start_time = time()
-        obs, binary_e = vs.get_data_elisa(params, phases, passbands=pssbnds)
+        obs = vs.get_elisa_observations(obs, phases)
         elapsed_e = np.round(time() - start_time, 2)
         print(f'ELISA time: {elapsed_e} s')
     except ERRORS as e:

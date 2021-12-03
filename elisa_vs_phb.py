@@ -28,7 +28,7 @@ def get_params(filename):
         return json.loads(f.read())
 
 
-def get_binary(params, triangles, r_eq):
+def get_binary(params, r_eq):
     b = phoebe.Bundle.default_binary()
     # b = phoebe.Bundle.default_binary(contact_binary=True)
 
@@ -38,8 +38,8 @@ def get_binary(params, triangles, r_eq):
     b.set_value("teff@secondary", params["secondary"]["t_eff"] * u.K)
     b.set_value("abun@primary", params["primary"]["metallicity"])
     b.set_value("abun@secondary", params["secondary"]["metallicity"])
-    b.set_value("syncpar@primary", params["primary"]["synchronicity"])
-    b.set_value("syncpar@secondary", params['secondary']['synchronicity'])
+    b.set_value("syncpar@primary@component", params['primary']['synchronicity'])
+    b.set_value("syncpar@secondary@component", params['secondary']['synchronicity'])
     b.set_value("gravb_bol@primary", params['primary']['gravity_darkening'])
     b.set_value('gravb_bol@secondary', params['secondary']['gravity_darkening'])
     b.set_value('irrad_frac_refl_bol@primary', params['primary']['albedo'])
@@ -56,17 +56,10 @@ def get_binary(params, triangles, r_eq):
     b.set_value("q@binary@component", params['system']['mass_ratio'])
     b.set_value('sma@binary@component', params['system']['semi_major_axis'] * u.solRad)
 
-    b.set_value("irrad_method@phoebe01@phoebe@compute", "wilson")
-    # b.set_value('ntriangles@primary', triangles[0])
-    # b.set_value('ntriangles@secondary', triangles[1])
-
     b.set_value("irrad_method@phoebe01@compute", "wilson")
 
     b.set_value('atm@primary', "ck2004")
     b.set_value('atm@secondary', "ck2004")
-
-    b.set_value("syncpar@primary@component", params['primary']['synchronicity'])
-    b.set_value("syncpar@secondary@component", params['secondary']['synchronicity'])
 
     return b
 
@@ -85,16 +78,19 @@ def get_data_phb(params, req):
     get_binary(params, req)
 
 
-def get_data_elisa(params, phs, passbands):
+def prepare_elisa_for_obs(params, passbands):
     passbands = [passbands] if type(passbands) == str else passbands
     binary = system.BinarySystem.from_json(params)
     o = Observer(passband=passbands, system=binary)  # specifying the binary system to use in light curve synthesis
+    return o
 
-    o.lc(
-        phases=phs,
+
+def get_elisa_observations(observer, phases):
+    observer.lc(
+        phases=phases,
         # normalize=True
     )
-    return o, binary
+    return observer
 
 
 def display_comparison(phases_e, fluxes_e, phases_b, fluxes_b):
@@ -162,7 +158,7 @@ def compare_lc(params, alpha, passband, nphs, normalize=True):
     ntri, r_eq = produce_aux_params(params)
 
     start_time = time()
-    binary = get_binary(params, triangles=ntri, r_eq=r_eq)
+    binary = get_binary(params, r_eq=r_eq)
     binary = run_observation(binary, phases, passbands=passband)
     elapsed = np.round(time() - start_time, 2)
     print(f'PHOEBE time: {elapsed} s')
@@ -189,6 +185,7 @@ def compare_lc(params, alpha, passband, nphs, normalize=True):
 
 
 if __name__ == "__main__":
+    matplotlib.use('TkAgg')
     logger = phoebe.logger(clevel='WARNING')
     home_dir = os.getcwd()
 

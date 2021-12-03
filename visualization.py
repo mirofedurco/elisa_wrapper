@@ -26,7 +26,7 @@ def analyze_speed(dataframe):
 
     ax2.hist(dataframe["t_phoebe"][~circ_mask] / dataframe["t_elisa"][~circ_mask], bins=100, density=True,
              label="eccentric")
-    ax2.set_xlabel(r"$t_{phoebe}/t_{elisa}$")
+    ax2.set_xlabel(r"$t_{phoebe}/t_{elisa}$", size=16)
     ax2.set_ylabel("Prob. density")
     ax2.legend()
     plt.show()
@@ -148,14 +148,14 @@ def params_vs_precision(dataframe, params, circular):
     ax = []
     for ii, param in enumerate(params):
         ax.append(fig.add_subplot(spec[ii, 0]))
-        gen_hist(dataframe[param][circ_mask], dataframe["std dev"][circ_mask], ax[ii], fig, y_sigma=5)
+        gen_hist(dataframe[param][circ_mask], dataframe["std dev"][circ_mask], ax[ii], fig)
         ax[ii].set_xlabel(param)
         ax[ii].set_ylabel("Standard deviation")
 
 
     ax[0].set_title(name)
 
-    plt.subplots_adjust(right=1.0, top=0.98, hspace=0.35)
+    plt.subplots_adjust(right=1.0, top=0.95, hspace=0.35)
     plt.show()
 
 
@@ -185,34 +185,39 @@ def compare_models(dtfrm, row_id, passband, alpha=7, n_phs=300):
 
 if __name__ == "__main__":
     home_dir = os.getcwd()
-    datafile = os.path.join(home_dir, "results", "samples_bak2.csv")
+    datafile = os.path.join(home_dir, "results", "samples.csv")
 
-    dtfrm = pd.read_csv(datafile)
-    mean_max, maxmax = dtfrm["max_dev"].mean(), dtfrm["max_dev"].max()
+    df = pd.read_csv(datafile)
+    mean_max, maxmax = df["max_dev"].mean(), df["max_dev"].max()
     print(f"Mean max deviation: {mean_max}")
     print(f"Maximum max deviation: {maxmax}")
 
-    mean_std, max_std = dtfrm["std dev"].mean(), dtfrm["std dev"].max()
+    mean_std, max_std = df["std dev"].mean(), df["std dev"].max()
     print(f"Mean std deviation: {mean_std}")
     print(f"Maximum std deviation: {max_std}")
 
-    circ_mask = dtfrm["eccentricity"] == 0.0
+    circ_mask = df["eccentricity"] == 0.0
 
     print(len(circ_mask), np.sum(circ_mask))
 
-    np.random.seed(int.from_bytes(os.urandom(4), byteorder='little'))
-    # id = dtfrm['std dev'].idxmax()
-    id = np.random.randint(0, dtfrm.shape[1])
-    print(dtfrm.iloc[id])
-    compare_models(dtfrm, id, 'TESS', n_phs=100)
+    # np.random.seed(int.from_bytes(os.urandom(4), byteorder='little'))
+    # idd = df['std dev'].idxmax()
+    # # id = np.random.randint(0, df.shape[1])
+    # print(df.iloc[idd])
+    # compare_models(df, idd, 'TESS', n_phs=100)
 
-    # analyze_speed(dtfrm)
-    # analyze_precision(dtfrm)
+    analyze_speed(df)
+    # analyze_precision(df)
 
-    # params_vs_speed(dtfrm, params=['inclination', 'mass_ratio', 'p__t_eff', 'std dev', 'max_dev'], circular=True)
-    # params_vs_speed(dtfrm, params=['eccentricity', 'p__surface_potential', 'p__t_eff', 'std dev'], circular=False)
-    # params_vs_precision(dtfrm, params=['inclination', 'p__t_eff', 'max_dev'], circular=True)
-    # params_vs_precision(dtfrm, params=['p__t_eff', 'max_dev'], circular=False)
+    # params_vs_precision(df, params=COLUMNS, circular=True)
+    # params_vs_speed(df, params=['inclination', 'mass_ratio', 'std dev', 'N_phases'], circular=True)
+    # params_vs_speed(df, params=['eccentricity', 'p__surface_potential', 'std dev', 'N_phases'], circular=False)
+    # params_vs_precision(df, params=['inclination', 'p__t_eff', 'max_dev'], circular=True)
+    # params_vs_precision(df, params=['p__t_eff', 'max_dev'], circular=False)
+
+    # params_vs_precision(df, params=['p__t_eff', 's__t_eff'], circular=True)
+    # params_vs_precision(df, params=['p__t_eff', 's__t_eff'], circular=False)
+
     # for column in COLUMNS:
-    #     param_vs_speed(dtfrm, column)
-    #     param_vs_precision(dtfrm, column)
+    #     param_vs_speed(df, column)
+    #     param_vs_precision(df, column)
