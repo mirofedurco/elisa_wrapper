@@ -15,16 +15,16 @@ from elisa.base.error import (
     TemperatureError, GravityError, SpotError
 )
 
-I_RANGE = (75, 90)
-P_RANGE = (1, 10)
-ARG0_RANGE = (0, 360)
-E_RANGE = (0, 0.9)
-Q_RANGE = (0.1, 1)
-A_RANGE = (1, 10)
-OMEGA_RANGE = (2, 10)
-TEFF_RANGE = (3500, 50000)
-TEFF_RANGE_OVERCONTACT = (3500, 8000)
-N_PHS_RANGE = (100, 800)
+I_RANGE = (75, 90)                        # range of inclinations [deg]
+P_RANGE = (1, 10)                         # range of orbital periods [d]
+ARG0_RANGE = (0, 360)                     # range of arguments of periastron [deg]
+E_RANGE = (0, 0.9)                        # range of eccentricities
+Q_RANGE = (0.1, 1)                        # range of mass_ratios
+A_RANGE = (1, 10)                         # range of SMA [solRad]
+OMEGA_RANGE = (2, 10)                     # range of surface potentials
+TEFF_RANGE = (3500, 50000)                # range of surface t_eff [K] for detached systems
+TEFF_RANGE_OVERCONTACT = (3500, 8000)     # range of surface t_eff [K] for overcontact systems
+N_PHS_RANGE = (100, 800)                  # range of number of points in LC
 # N_PHS_RANGE = (10, 100)
 
 ALPHA = 7
@@ -43,6 +43,13 @@ COLUMNS = ["inclination", "period", "argument_of_periastron", "eccentricity", "m
 
 
 def draw_params(params, circular=False):
+    """
+    Generate random parameters of the binary system.
+
+    :param params: Dict; default binary params
+    :param circular: bool; if True, eccentricity is fixed to 0
+    :return: Dict; binary parameters with randomly generated parameters
+    """
     params['system']['inclination'] = np.random.uniform(I_RANGE[0], I_RANGE[1])
     params['system']['period'] = np.random.uniform(P_RANGE[0], P_RANGE[1])
     params['system']['argument_of_periastron'] = np.random.uniform(ARG0_RANGE[0], ARG0_RANGE[1])
@@ -70,13 +77,22 @@ def draw_params(params, circular=False):
     return params
 
 
-def eval_node(params, pssbnds, pssbnd_to_analyse, file):
+def eval_node(params_orig, pssbnds, pssbnd_to_analyse, file):
+    """
+    Evaluating binary system in PHOEBE and ELISa. Afterwards, the performance (time and precision) is compared.
+
+    :param params_orig: Dict; default system JSON
+    :param pssbnds: List; list of used passbands
+    :param pssbnd_to_analyse: passband that will be used for comparison
+    :param file: str; path to the csv with the results
+    :return: None;
+    """
     np.random.seed(int.from_bytes(os.urandom(4), byteorder='little'))
     circular = np.random.choice([True, False], p=[0.4, 0.6])
-    params = draw_params(params=params, circular=circular)
+    random_params = draw_params(params=copy(params_orig), circular=circular)
 
     try:
-        ntri, r_eq = vs.produce_aux_params(params)
+        ntri, r_eq = vs.produce_aux_params(random_params)
     except ERRORS as e:
         print(f"Invalid system, reason: {e}")
         return False
@@ -87,9 +103,9 @@ def eval_node(params, pssbnds, pssbnd_to_analyse, file):
 
     try:
         # start_time = time()
-        binary = vs.get_binary(params, r_eq=r_eq)
+        binary = vs.get_phoebe_binary(random_params, r_eq=r_eq)
         start_time = time()
-        binary = vs.run_observation(binary, phases, passbands=pssbnds)
+        binary = vs.run_phoebe_observation(binary, phases, passbands=pssbnds)
         elapsed_p = np.round(time() - start_time, 2)
     except (ValueError,) as e:
         print(f"Invalid system, reason: {e}")
@@ -97,12 +113,11 @@ def eval_node(params, pssbnds, pssbnd_to_analyse, file):
 
     print(f'PHOEBE time: {elapsed_p} s')
 
-    phases_b = binary[f'{pssbnd_to_analyse}@times@latest'].value / binary['period@orbit'].value
     fluxes_b = binary[f'{pssbnd_to_analyse}@fluxes@latest'].value
 
     try:
         # start_time = time()
-        obs = vs.prepare_elisa_for_obs(params, passbands)
+        obs = vs.prepare_elisa_for_obs(random_params, passbands)
         start_time = time()
         obs = vs.get_elisa_observations(obs, phases)
         elapsed_e = np.round(time() - start_time, 2)
@@ -123,7 +138,7 @@ def eval_node(params, pssbnds, pssbnd_to_analyse, file):
     stdev = res.std()
     maxdev = res.max()
 
-    write_csv_row(file, params, stdev, maxdev, elapsed_p, elapsed_e, nphs)
+    write_csv_row(file, random_params, stdev, maxdev, elapsed_p, elapsed_e, nphs)
     # vs.display_comparison(phases_e, fluxes_e, phases_b, fluxes_b)
 
     return True
@@ -136,6 +151,18 @@ def create_file_header(file):
 
 
 def write_csv_row(file, params, stdev, maxdev, t_phoebe, t_elisa, n_phs):
+    """
+    Add new sample to result csv file.
+
+    :param file: str; filename containing results
+    :param params: Dict; JSON with system parameters
+    :param stdev: float; standard deviation between ELISA and Phoebe normalized LC points
+    :param maxdev: float; maximum recorded deviation between ELISA and Phoebe normalized LC points
+    :param t_phoebe: float; time elapsed during phoebe curve evaluation
+    :param t_elisa: float; time elapsed during elisa curve evaluation
+    :param n_phs: int; number of points in curve
+    :return: None;
+    """
     row = [params["system"][col] for col in COLUMNS[:6]]
     row += [params["primary"][col.split("__")[1]] for col in COLUMNS[6:8]]
     row += [params["secondary"][col.split("__")[1]] for col in COLUMNS[8:10]]
@@ -147,7 +174,15 @@ def write_csv_row(file, params, stdev, maxdev, t_phoebe, t_elisa, n_phs):
 
 
 def perform_sampling(params_orig, pssbnds, pssbnd_to_analyse, file):
-    params = copy(params_orig)
+    """
+    Sample randomly generated binary systems.
+
+    :param params_orig: Dict; default system JSON
+    :param pssbnds: List; list of used passbands
+    :param pssbnd_to_analyse: passband that will be used for comparison
+    :param file: str; path to the csv with the results
+    :return: None;
+    """
     if not os.path.isfile(file):
         create_file_header(file)
     success = np.full(int(N_SAMPLES), False, dtype=bool)
@@ -155,7 +190,8 @@ def perform_sampling(params_orig, pssbnds, pssbnd_to_analyse, file):
         # eval_node(params, pssbnds, pssbnd_to_analyse, circular)
         fail_mask = success == False
         pool = Pool(processes=NUMBER_OF_PROCESSES)
-        result = [pool.apply_async(eval_node, (params, pssbnds, pssbnd_to_analyse, file)) for _ in success[fail_mask]]
+        result = [pool.apply_async(eval_node, (params_orig, pssbnds, pssbnd_to_analyse, file))
+                  for _ in success[fail_mask]]
         pool.close()
         pool.join()
         success[fail_mask] = np.array([r.get() for r in result])
@@ -173,5 +209,5 @@ if __name__ == "__main__":
     home_dir = os.getcwd()
 
     data_orig = vs.get_params(home_dir + '/models/init_binary.json')
-    result_file = home_dir + '/results/samples.csv'
+    result_file = home_dir + '/results/samples1.csv'
     perform_sampling(data_orig, passbands, passband_to_analyse, file=result_file)

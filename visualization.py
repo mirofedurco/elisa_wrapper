@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import numpy as np
 
+from copy import copy
+
 from matplotlib.image import NonUniformImage
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -176,11 +178,39 @@ def produce_params_from_row(row):
     return params
 
 
-def compare_models(dtfrm, row_id, passband, alpha=7, n_phs=300):
+def compare_models(dtfrm, row_id, passband, alpha=7, n_phs=300, invert_system=False):
+    """
+    Compare LCs corresponding to a given row in a dataframe created from the csv file produced by the sampling.
+
+    :param dtfrm: pandas.DataFrame; dataframe created from csv file with samples
+    :param row_id: int; row with parameters which will be used to produce LCs
+    :param passband: str; name of the passband used for the LC evaluation
+    :param alpha: float; discretization factor
+    :param n_phs: number of phases in LC
+    :param invert_system: bool; if True; system component will be swapped
+    :return: None
+    """
     row = dtfrm.iloc[row_id]
 
     params = produce_params_from_row(row)
+    params = invert_parameters(params) if invert_system else params
     vs.compare_lc(params=params, alpha=alpha, passband=passband, nphs=n_phs)
+
+
+def invert_parameters(params):
+    inv_params = {
+        "system": copy(params["system"]),
+        "primary": copy(params["secondary"]),
+        "secondary": copy(params['primary'])
+    }
+
+    mass_ratio = params["system"]["mass_ratio"]
+    inv_params["system"]["mass_ratio"] = 1 / mass_ratio
+    p_potential = inv_params["primary"]["surface_potential"]
+    inv_params["primary"]["surface_potential"] = p_potential / mass_ratio + 0.5 * (mass_ratio - 1) / mass_ratio
+    s_potential = inv_params["secondary"]["surface_potential"]
+    inv_params["secondary"]["surface_potential"] = s_potential / mass_ratio + 0.5 * (mass_ratio - 1) / mass_ratio
+    return inv_params
 
 
 if __name__ == "__main__":
@@ -201,12 +231,13 @@ if __name__ == "__main__":
     print(len(circ_mask), np.sum(circ_mask))
 
     # np.random.seed(int.from_bytes(os.urandom(4), byteorder='little'))
-    # idd = df['std dev'].idxmax()
-    # # id = np.random.randint(0, df.shape[1])
-    # print(df.iloc[idd])
+    idd = df['std dev'].idxmax()
+    # id = np.random.randint(0, df.shape[1])
+    print(df.iloc[idd])
     # compare_models(df, idd, 'TESS', n_phs=100)
+    compare_models(df, idd, 'TESS', n_phs=100, invert_system=True)
 
-    analyze_speed(df)
+    # analyze_speed(df)
     # analyze_precision(df)
 
     # params_vs_precision(df, params=COLUMNS, circular=True)

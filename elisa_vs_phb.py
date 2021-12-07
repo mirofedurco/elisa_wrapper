@@ -28,7 +28,14 @@ def get_params(filename):
         return json.loads(f.read())
 
 
-def get_binary(params, r_eq):
+def get_phoebe_binary(params, r_eq):
+    """
+    Initializing a Phoebe bundle from binary system JSON.
+
+    :param params: Dict; system JSON with parameters
+    :param r_eq: Tuple; equivalent radii
+    :return: phoebe bundle
+    """
     b = phoebe.Bundle.default_binary()
     # b = phoebe.Bundle.default_binary(contact_binary=True)
 
@@ -64,7 +71,15 @@ def get_binary(params, r_eq):
     return b
 
 
-def run_observation(binary, phases, passbands):
+def run_phoebe_observation(binary, phases, passbands):
+    """
+    Producing observations using Phoebe.
+
+    :param binary: phoebe bundle
+    :param phases: numpy.array; photometric phases
+    :param passbands: List;
+    :return: phoebe bundle
+    """
     times = phases * binary['period@orbit'].value
     passbands = [passbands] if type(passbands) == str else passbands
     for psbnd in passbands:
@@ -75,10 +90,17 @@ def run_observation(binary, phases, passbands):
 
 
 def get_data_phb(params, req):
-    get_binary(params, req)
+    get_phoebe_binary(params, req)
 
 
 def prepare_elisa_for_obs(params, passbands):
+    """
+    Initialize BinarySystem and Observer instance.
+
+    :param params: dict; JSON with system parameters
+    :param passbands: List;
+    :return: elisa.Observer;
+    """
     passbands = [passbands] if type(passbands) == str else passbands
     binary = system.BinarySystem.from_json(params)
     o = Observer(passband=passbands, system=binary)  # specifying the binary system to use in light curve synthesis
@@ -86,6 +108,13 @@ def prepare_elisa_for_obs(params, passbands):
 
 
 def get_elisa_observations(observer, phases):
+    """
+    Produce LC in elisa.
+
+    :param observer: elisa.Observer;
+    :param phases: numpy.array; photometric phases
+    :return: elisa.Observer
+    """
     observer.lc(
         phases=phases,
         # normalize=True
@@ -117,6 +146,13 @@ def display_comparison(phases_e, fluxes_e, phases_b, fluxes_b):
 
 
 def produce_aux_params(params):
+    """
+    Generating parameters for the use in PHOEBE such as SMA, albedos, number of triangles and equivalent radii from
+    elisa BinarySystem.
+
+    :param params: dict; system JSON
+    :return: Tuple; number of triangles, eqiovalent radii
+    """
     binary = system.BinarySystem.from_json(params)
     sma = binary.semi_major_axis * units.DISTANCE_UNIT
     params["primary"]["albedo"] = binary.primary.albedo
@@ -136,11 +172,8 @@ def produce_aux_params(params):
     ntri = (container.primary.faces.shape[0], container.secondary.faces.shape[0])
     print(f"Number of triangles: {ntri}")
     r_eq = binary.calculate_equivalent_radius(component='both')
-    # K = 0.999
-    K = 1.0
-    # K = 1.002
-    r_eq1 = K * r_eq['primary'] * sma
-    r_eq2 = K * r_eq['secondary'] * sma
+    r_eq1 = r_eq['primary'] * sma
+    r_eq2 = r_eq['secondary'] * sma
 
     print(f"Radii: {r_eq1.to(u.solRad):.2f}, {r_eq2.to(u.solRad):.2f} solRad")
 
@@ -158,8 +191,8 @@ def compare_lc(params, alpha, passband, nphs, normalize=True):
     ntri, r_eq = produce_aux_params(params)
 
     start_time = time()
-    binary = get_binary(params, r_eq=r_eq)
-    binary = run_observation(binary, phases, passbands=passband)
+    binary = get_phoebe_binary(params, r_eq=r_eq)
+    binary = run_phoebe_observation(binary, phases, passbands=passband)
     elapsed = np.round(time() - start_time, 2)
     print(f'PHOEBE time: {elapsed} s')
     phases_b = binary[f'{passband}@times@latest'].value / binary['period@orbit'].value
@@ -169,7 +202,7 @@ def compare_lc(params, alpha, passband, nphs, normalize=True):
 
     start_time = time()
     obs = prepare_elisa_for_obs(params, passband)
-    obs, binary_e = get_elisa_observations(obs, phases)
+    obs = get_elisa_observations(obs, phases)
     elapsed = np.round(time() - start_time, 2)
     print(f'ELISA time: {elapsed} s')
 
