@@ -213,8 +213,6 @@ def compare_lc(params, alpha, passband, nphs, normalize=True):
         fluxes_e /= np.max(fluxes_e)
         fluxes_b /= np.max(fluxes_b)
 
-    print(f'Mean flux elisa: {fluxes_e.mean()}, phoebe: {fluxes_b.mean()}')
-
     display_comparison(phases_e, fluxes_e, phases_b, fluxes_b)
 
 
